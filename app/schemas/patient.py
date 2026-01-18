@@ -2,7 +2,7 @@
 환자 관련 스키마
 """
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 
@@ -74,3 +74,9 @@ class PatientRequestsResponse(BaseModel):
     patient_name: str
     status: str
     requests: list
+
+
+class PatientListResponse(BaseModel):
+    """환자 목록 응답"""
+    patients: List[PatientResponse]
+    total: int
