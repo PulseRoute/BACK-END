@@ -50,6 +50,19 @@ class PatientRegisterRequest(BaseModel):
         }
 
 
+class MatchedHospitalSchema(BaseModel):
+    """매칭된 병원 정보"""
+    hospital_id: str
+    name: str
+    address: Optional[str] = None
+    ml_score: Optional[float] = None
+    distance_km: Optional[float] = None
+    estimated_time_minutes: Optional[int] = None
+    recommendation_reason: Optional[str] = None
+    total_beds: Optional[int] = None
+    has_trauma_center: Optional[bool] = None
+
+
 class PatientResponse(BaseModel):
     """환자 응답"""
     id: str
@@ -63,7 +76,8 @@ class PatientResponse(BaseModel):
     status: str
     ems_unit_id: str
     created_at: datetime
-    
+    matched_hospitals: Optional[List[MatchedHospitalSchema]] = None
+
     class Config:
         from_attributes = True
 

@@ -72,9 +72,27 @@ class PatientService:
                 self.firebase_client.update_patient(patient_id, {"status": "matched"})
 
             logger.info(f"환자 등록 성공: {patient_id}")
-            
-            # 생성된 환자 정보 반환
+
+            # 생성된 환자 정보 반환 (매칭된 병원 목록 포함)
             patient = self.firebase_client.get_patient(patient_id)
+
+            # 매칭된 병원 정보 추가
+            if matched_hospitals:
+                patient["matched_hospitals"] = [
+                    {
+                        "hospital_id": h.get("hospital_id"),
+                        "name": h.get("name", ""),
+                        "address": h.get("address", ""),
+                        "ml_score": h.get("ml_score"),
+                        "distance_km": h.get("distance_km"),
+                        "estimated_time_minutes": h.get("estimated_time_minutes"),
+                        "recommendation_reason": h.get("recommendation_reason", ""),
+                        "total_beds": h.get("total_beds"),
+                        "has_trauma_center": h.get("has_trauma_center"),
+                    }
+                    for h in matched_hospitals
+                ]
+
             return patient
         except Exception as e:
             logger.error(f"환자 등록 실패: {str(e)}")
@@ -122,9 +140,13 @@ class PatientService:
                         matches.append({
                             "hospital_id": hospital.get("facid"),
                             "name": hospital.get("name"),
-                            "ml_score": hospital.get("score", 0.5),
+                            "address": hospital.get("address"),
+                            "ml_score": hospital.get("final_score", 0),
                             "distance_km": hospital.get("distance_km", 0),
-                            "estimated_time_minutes": hospital.get("estimated_time_minutes", 0),
+                            "estimated_time_minutes": int(hospital.get("duration_minutes", 0)),
+                            "recommendation_reason": hospital.get("recommendation_reason"),
+                            "total_beds": hospital.get("total_beds"),
+                            "has_trauma_center": hospital.get("has_trauma_center"),
                             "hospital_info": hospital,
                         })
 
@@ -167,10 +189,15 @@ class PatientService:
                     "patient_id": patient_id,
                     "ems_unit_id": ems_unit_id,
                     "hospital_id": match["hospital_id"],
+                    "hospital_name": match.get("name", ""),
+                    "hospital_address": match.get("address", ""),
                     "status": "pending",
-                    "ml_score": match.get("ml_score", 0.5),
+                    "ml_score": match.get("ml_score", 0),
                     "distance_km": match.get("distance_km", 0),
                     "estimated_time_minutes": match.get("estimated_time_minutes", 0),
+                    "recommendation_reason": match.get("recommendation_reason", ""),
+                    "total_beds": match.get("total_beds"),
+                    "has_trauma_center": match.get("has_trauma_center"),
                 }
                 
                 self.firebase_client.create_transfer_request(request_data)
