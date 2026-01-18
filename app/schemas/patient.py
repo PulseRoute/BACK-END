@@ -55,6 +55,8 @@ class MatchedHospitalSchema(BaseModel):
     hospital_id: str
     name: str
     address: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     ml_score: Optional[float] = None
     distance_km: Optional[float] = None
     estimated_time_minutes: Optional[int] = None
