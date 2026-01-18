@@ -42,15 +42,15 @@ app.add_middleware(
 
 
 # 라우터 등록
-app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
-app.include_router(patients.router, prefix="/api/patients", tags=["환자"])
-app.include_router(hospitals.router, prefix="/api/hospitals", tags=["병원"])
-app.include_router(requests.router, prefix="/api/requests", tags=["요청"])
-app.include_router(history.router, prefix="/api/history", tags=["히스토리"])
-app.include_router(chat.router, prefix="/api/chat", tags=["채팅"])
+app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
+app.include_router(patients.router, prefix="/api/patients", tags=["Patients"])
+app.include_router(hospitals.router, prefix="/api/hospitals", tags=["Hospitals"])
+app.include_router(requests.router, prefix="/api/requests", tags=["Requests"])
+app.include_router(history.router, prefix="/api/history", tags=["History"])
+app.include_router(chat.router, prefix="/api/chat", tags=["Chat"])
 
 
-@app.get("/health", tags=["헬스체크"])
+@app.get("/health", tags=["Health Check"])
 async def health_check():
     """
     서버 헬스체크
