@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+firebase-admin
+httpx
+pydantic
+python-dotenv
+websockets

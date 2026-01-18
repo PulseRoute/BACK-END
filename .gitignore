@@ -48,6 +48,28 @@ coverage.xml
 *.cover
 *.py.cover
 .hypothesis/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Firebase credentials
+firebase-credentials.json
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Mac
+.DS_Store
 .pytest_cache/
 cover/
 
