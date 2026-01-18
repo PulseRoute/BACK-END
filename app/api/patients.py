@@ -3,6 +3,7 @@
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.schemas.patient import PatientRegisterRequest, PatientResponse, PatientRequestsResponse, PatientListResponse
+from app.schemas.request import TransferRequestCreateRequest, TransferRequestResponse
 from app.services.patient_service import PatientService
 from app.dependencies import get_current_ems_user
 from typing import Dict, Any
@@ -49,8 +50,11 @@ async def register_patient(
     current_user: Dict[str, Any] = Depends(get_current_ems_user),
 ):
     """
-    환자 등록 및 자동 병원 매칭
-    
+    환자 등록 및 병원 추천
+
+    환자 정보를 등록하고 ML을 통해 추천 병원 목록을 반환합니다.
+    이송 요청은 별도의 API (POST /{patient_id}/request)를 통해 생성합니다.
+
     - **name**: 환자 이름
     - **age**: 환자 나이
     - **gender**: 환자 성별 (M/F)
@@ -58,9 +62,9 @@ async def register_patient(
     - **severity_code**: 중증도 코드 (KTAS_1~5)
     - **location**: 위치 정보 (latitude, longitude)
     - **vital_signs**: 바이탈 사인 (선택사항)
-    
+
     반환:
-    - 등록된 환자 정보
+    - 등록된 환자 정보 + matched_hospitals (추천 병원 목록)
     """
     try:
         patient = await patient_service.register_patient(
@@ -92,10 +96,13 @@ async def retry_match(
     """
     ML 매칭 재시도
 
+    searching 상태인 환자에 대해 ML 매칭을 다시 시도합니다.
+    이송 요청은 별도의 API (POST /{patient_id}/request)를 통해 생성합니다.
+
     - **patient_id**: 환자 ID (status가 searching인 환자만 가능)
 
     반환:
-    - 매칭 성공 시: 업데이트된 환자 정보
+    - 매칭 성공 시: 환자 정보 + matched_hospitals (추천 병원 목록)
     - 매칭 실패 시: 400 에러
     """
     try:
@@ -189,4 +196,49 @@ async def get_patient_requests(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="요청 조회 중 오류가 발생했습니다",
+        )
+
+
+@router.post("/{patient_id}/request", response_model=TransferRequestResponse)
+async def create_transfer_request(
+    patient_id: str,
+    request: TransferRequestCreateRequest,
+    current_user: Dict[str, Any] = Depends(get_current_ems_user),
+):
+    """
+    특정 병원에 이송 요청 생성
+
+    - **patient_id**: 환자 ID
+    - **hospital_id**: 병원 ID (ML 매칭 결과의 facid)
+    - **hospital_name**: 병원 이름
+    - **hospital_address**: 병원 주소 (선택)
+    - **ml_score**: ML 점수 (선택)
+    - **distance_km**: 거리 (선택)
+    - **estimated_time_minutes**: 예상 소요 시간 (선택)
+
+    반환:
+    - 생성된 이송 요청 정보
+    """
+    try:
+        result = patient_service.create_transfer_request(
+            patient_id,
+            current_user["user_id"],
+            request.model_dump(),
+        )
+
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="이송 요청 생성에 실패했습니다. 환자가 존재하지 않거나 권한이 없습니다.",
+            )
+
+        logger.info(f"이송 요청 생성: {patient_id} -> {request.hospital_id}")
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"이송 요청 생성 중 오류: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="이송 요청 생성 중 오류가 발생했습니다",
         )

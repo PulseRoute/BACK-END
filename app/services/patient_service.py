@@ -58,17 +58,12 @@ class PatientService:
             # ML 서버로 매칭 요청 (ML 서버가 병원 검색/거리 계산 수행)
             matched_hospitals = await self._get_ml_matches(patient_data)
 
-            # ML 실패 시: 환자는 등록 (status: searching), 이송 요청은 생성 안함
+            # ML 실패 시: status는 searching 유지
+            # ML 성공 시: status를 matched로 변경 (이송 요청은 별도 API에서 생성)
             if not matched_hospitals:
                 logger.warning(f"ML 매칭 실패, 환자 등록만 완료: {patient_id}")
             else:
-                # 자동으로 이송 요청 생성
-                await self._create_transfer_requests(
-                    patient_id,
-                    ems_unit_id,
-                    matched_hospitals,
-                )
-                # 환자 상태 업데이트
+                # 환자 상태 업데이트 (추천 병원 있음)
                 self.firebase_client.update_patient(patient_id, {"status": "matched"})
 
             logger.info(f"환자 등록 성공: {patient_id}")
@@ -243,18 +238,28 @@ class PatientService:
                 logger.warning(f"ML 재매칭 실패: {patient_id}")
                 return None
 
-            # 이송 요청 생성
-            await self._create_transfer_requests(
-                patient_id,
-                patient["ems_unit_id"],
-                matched_hospitals,
-            )
-
             # 환자 상태 업데이트
             self.firebase_client.update_patient(patient_id, {"status": "matched"})
 
             logger.info(f"ML 재매칭 성공: {patient_id}")
-            return self.firebase_client.get_patient(patient_id)
+
+            # 환자 정보 반환 (매칭된 병원 목록 포함)
+            updated_patient = self.firebase_client.get_patient(patient_id)
+            updated_patient["matched_hospitals"] = [
+                {
+                    "hospital_id": h.get("hospital_id"),
+                    "name": h.get("name", ""),
+                    "address": h.get("address", ""),
+                    "ml_score": h.get("ml_score"),
+                    "distance_km": h.get("distance_km"),
+                    "estimated_time_minutes": h.get("estimated_time_minutes"),
+                    "recommendation_reason": h.get("recommendation_reason", ""),
+                    "total_beds": h.get("total_beds"),
+                    "has_trauma_center": h.get("has_trauma_center"),
+                }
+                for h in matched_hospitals
+            ]
+            return updated_patient
 
         except Exception as e:
             logger.error(f"ML 재매칭 중 오류: {str(e)}")
@@ -350,4 +355,67 @@ class PatientService:
             }
         except Exception as e:
             logger.error(f"환자 요청 조회 실패: {str(e)}")
+            return None
+
+    def create_transfer_request(
+        self,
+        patient_id: str,
+        ems_unit_id: str,
+        hospital_data: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        """
+        특정 병원에 이송 요청 생성
+
+        Args:
+            patient_id: 환자 ID
+            ems_unit_id: EMS 유닛 ID (권한 확인용)
+            hospital_data: 병원 정보 (hospital_id, hospital_name 등)
+
+        Returns:
+            생성된 이송 요청 정보 또는 None
+        """
+        try:
+            # 환자 확인
+            patient = self.firebase_client.get_patient(patient_id)
+            if not patient:
+                logger.warning(f"환자를 찾을 수 없음: {patient_id}")
+                return None
+
+            # 권한 확인
+            if patient.get("ems_unit_id") != ems_unit_id:
+                logger.warning(f"권한 없음: {patient_id}, {ems_unit_id}")
+                return None
+
+            # 이미 이송 완료된 환자인지 확인
+            if patient.get("status") == "transferred":
+                logger.warning(f"이미 이송 완료된 환자: {patient_id}")
+                return None
+
+            # 이송 요청 생성
+            request_data = {
+                "patient_id": patient_id,
+                "ems_unit_id": ems_unit_id,
+                "hospital_id": hospital_data["hospital_id"],
+                "hospital_name": hospital_data.get("hospital_name", ""),
+                "hospital_address": hospital_data.get("hospital_address", ""),
+                "status": "pending",
+                "ml_score": hospital_data.get("ml_score", 0),
+                "distance_km": hospital_data.get("distance_km", 0),
+                "estimated_time_minutes": hospital_data.get("estimated_time_minutes", 0),
+                "recommendation_reason": hospital_data.get("recommendation_reason", ""),
+                "total_beds": hospital_data.get("total_beds"),
+                "has_trauma_center": hospital_data.get("has_trauma_center"),
+            }
+
+            request_id = self.firebase_client.create_transfer_request(request_data)
+
+            # 환자 상태 업데이트 (요청 중)
+            self.firebase_client.update_patient(patient_id, {"status": "requesting"})
+
+            logger.info(f"이송 요청 생성 성공: {patient_id} -> {hospital_data['hospital_id']}")
+
+            # 생성된 요청 정보 반환
+            return self.firebase_client.get_transfer_request(request_id)
+        except Exception as e:
+            logger.error(f"이송 요청 생성 실패: {str(e)}")
             return None
