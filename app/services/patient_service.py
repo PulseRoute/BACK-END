@@ -392,10 +392,13 @@ class PatientService:
                 return None
 
             # 이송 요청 생성
+            # [시연용] 모든 요청을 hosp01로 전달
+            demo_hospital_id = "hosp01"
+
             request_data = {
                 "patient_id": patient_id,
                 "ems_unit_id": ems_unit_id,
-                "hospital_id": hospital_data["hospital_id"],
+                "hospital_id": demo_hospital_id,  # 시연용: 항상 hosp01로 전달
                 "hospital_name": hospital_data.get("hospital_name", ""),
                 "hospital_address": hospital_data.get("hospital_address", ""),
                 "status": "pending",
